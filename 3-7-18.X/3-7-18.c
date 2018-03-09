@@ -19,7 +19,7 @@
 #pragma config XINST = OFF
 
 int masterPower;
-int slavePower;
+signed int slavePower;
 int freqr;
 int freql;
 int encodercountl = 0;
@@ -33,14 +33,15 @@ int derror;
 int ierror;
 int encodercountr2;
 int encodercountl2;
-int freqravg;
-int freqlavg;
+float freqravg;
+float freqlavg;
 int timercount;
-int errorfreq;
+float errorfreq;
 int x1;
 int x2;
 int y1;
 int y2;
+int calibrate;
 
 
 void enc_check (void);
@@ -74,11 +75,15 @@ void low_int_priorities (void)
 void frequencycalc (void)
 { 
     timercount++;
+    if(calibrate <= 1000)
+    {
+    calibrate++;
+    }
     freqr = (encodercountr2 * 20);
     freql = (encodercountl2 * 20);
     
-    freqravg = ((freqravg * 3)>>2) + (freqr>>2);
-    freqlavg = ((freqlavg * 3)>>2) + (freql>>2);
+    freqravg = ((freqravg * 3)/4) + (freqr/4);
+    freqlavg = ((freqlavg * 3)/4) + (freql/4);
     if (timercount == 0)
     {
         for(;;){}
@@ -144,8 +149,7 @@ void intinit (void)
     INTCON3bits.INT1P = 0;
     INTCON3bits.INT2P = 0;
     INTCON2bits.INTEDG1 = 0;
-    INTCON2bits.INTEDG2 = 0;
-    
+    INTCON2bits.INTEDG2 = 0;   
     INTCONbits.TMR0IE = 1;
     INTCON2bits.TMR0IP = 0;
 }
@@ -163,26 +167,29 @@ void speedupdate(void)
 }
 void calcerror (void)
 {
-    x2 = slavePower;
-    errorprev = error;
-    error = encodercountl - encodercountr;
-    errorfreq = freqlavg - freqravg;
+    errorprev = errorfreq;
+    error = encodercountr - encodercountl;
+    errorfreq = freqravg - freqlavg;
      
     
-    derror = error - errorprev;
+    derror = errorfreq - errorprev;
  
-    slavePower += ((errorfreq * kp) + (derror * kd) + (ierror * ki));
+
+        slavePower += ((errorfreq * kp) + (derror * kd) + (ierror * ki));
+
+    
     
     if( slavePower >= 156)
     {
-        slavePower = 150;
+        slavePower = 156;
     }
-    if(slavePower <= 103)
+    if(slavePower <= (x1 - 1))
     {
-        slavePower = 150;
+        slavePower = (x1 - 1);
     }
     
-    ierror = ierror + error;
+    
+    ierror = ierror + errorfreq;
     
    
     encodercountl = 0;
@@ -194,19 +201,19 @@ void main (void)
     OSCCONbits.IRCF1 = 1;  // see pp. 32 of 18F4520 PDF
     OSCCONbits.IRCF2 = 1;
 
-    
+    calibrate = 0;
     masterPower = x1;
     slavePower = x2;
     
-    freqravg = 100;
+    freqravg = 0;
     freqr = 0;
-    freqlavg = 120;
+    freqlavg = 0;
     freql = 0;
     timercount = 0;
  
     error = 0;
     kp = 0.75;
-    kd = 0;
+    kd = 0.3;
     ki = 0;
     x1 = 144;
     x2 = 144;
@@ -220,12 +227,9 @@ void main (void)
 
     while(1)
     { 
-    y1 = 10000 - x1;
-    y2 = 10000 - x2;
-    
-    
     INTCONbits.GIE = 0;
     speedupdate();
+    x2 = slavePower;
     calcerror();
     INTCONbits.GIE = 1;
      
