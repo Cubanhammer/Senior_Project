@@ -19,11 +19,11 @@
 #pragma config XINST = OFF
 
 int masterPower;
-signed int slavePower;
+float slavePower;
 int freqr;
 int freql;
-int encodercountl = 0;
-int encodercountr = 0;
+float encodercountl = 0;
+float encodercountr = 0;
 int error;
 int errorprev;
 float kp;
@@ -31,8 +31,8 @@ float kd;
 float ki;
 int derror;
 int ierror;
-int encodercountr2;
-int encodercountl2;
+float encodercountr2;
+float encodercountl2;
 float freqravg;
 float freqlavg;
 int timercount;
@@ -42,6 +42,7 @@ int x2;
 int y1;
 int y2;
 int calibrate;
+float P, I, D;
 
 
 void enc_check (void);
@@ -79,8 +80,8 @@ void frequencycalc (void)
     {
     calibrate++;
     }
-    freqr = (encodercountr2 * 20);
-    freql = (encodercountl2 * 20);
+    freqr = (encodercountr2);
+    freql = (encodercountl2);
     
     freqravg = ((freqravg * 3)/4) + (freqr/4);
     freqlavg = ((freqlavg * 3)/4) + (freql/4);
@@ -92,8 +93,8 @@ void frequencycalc (void)
    
     encodercountr2 = 0;
     encodercountl2 = 0;
-    TMR0H = 0x3C;
-    TMR0L = 0xB0;
+TMR0H = 0x3C;
+TMR0L = 0xB0;
     INTCONbits.TMR0IF = 0;
 }
 void enc_check (void) 
@@ -131,12 +132,12 @@ void inoutinit (void)
 }
 void timerinit (void)
 {
-    T0CONbits.T08BIT = 0;
-    T0CONbits.T0CS = 0;
-    T0CONbits.PSA = 1;
-    TMR0H = 0x3C;
-    TMR0L = 0xB0;
-    T0CONbits.TMR0ON = 1;
+T0CONbits.T08BIT = 0;
+T0CONbits.T0CS = 0;
+T0CONbits.PSA = 1;
+TMR0H = 0x3C;
+TMR0L = 0xB0;
+T0CONbits.TMR0ON = 1;
 }
 
 void intinit (void)
@@ -169,16 +170,19 @@ void calcerror (void)
 {
     errorprev = errorfreq;
     error = encodercountr - encodercountl;
-    errorfreq = freqravg - freqlavg;
-     
+
+    errorfreq = freqravg - freqlavg;  
+    P = (errorfreq * kp); 
     
     derror = errorfreq - errorprev;
+    D = (derror * kd);
+    
  
 
-        slavePower += ((errorfreq * kp) + (derror * kd) + (ierror * ki));
+    slavePower += P + I + D;
 
     
-    
+    /*
     if( slavePower >= 156)
     {
         slavePower = 156;
@@ -187,9 +191,10 @@ void calcerror (void)
     {
         slavePower = (x1 - 1);
     }
-    
+    */
     
     ierror = ierror + errorfreq;
+    I = (ierror * ki);
     
    
     encodercountl = 0;
@@ -212,13 +217,13 @@ void main (void)
     timercount = 0;
  
     error = 0;
-    kp = 0.75;
-    kd = 0.3;
+    kp = 0.035;
+    kd = 0;
     ki = 0;
     x1 = 144;
     x2 = 144;
-    y1 = 10000 - x1;
-    y2 = 10000 - x2;
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
   
    
     inoutinit();
@@ -229,7 +234,13 @@ void main (void)
     { 
     INTCONbits.GIE = 0;
     speedupdate();
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+  
+
     x2 = slavePower;
+
+    
     calcerror();
     INTCONbits.GIE = 1;
      
@@ -239,13 +250,13 @@ void main (void)
     if(PORTAbits.RA4 == 0)
          {
              x1 = x1 + 1;
-             x2 = x2 + 1;
+             //x2 = x2 + 1;
              Delay10KTCYx(5); 
          }
     if(PORTBbits.RB0 == 0)
          {
              x1 = x1 - 1;
-             x2 = x2 - 1;
+             //x2 = x2 - 1;
              Delay10KTCYx(5); 
          }
        }
