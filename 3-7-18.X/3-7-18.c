@@ -18,31 +18,38 @@
 #pragma config LVP = OFF
 #pragma config XINST = OFF
 
-int masterPower;
+float masterPower;
 float slavePower;
 int freqr;
 int freql;
-float encodercountl = 0;
-float encodercountr = 0;
-int error;
-int errorprev;
+int encodercountl = 0;
+int encodercountr = 0;
+float error;
+float errorprevr;
+float errorprevl;
 float kp;
 float kd;
 float ki;
-int derror;
-int ierror;
+float derrorr;
+float derrorl;
+float ierrorr;
+float ierrorl;
 float encodercountr2;
 float encodercountl2;
 float freqravg;
 float freqlavg;
 int timercount;
-float errorfreq;
+float errorfreqr;
+float errorfreql;
 int x1;
 int x2;
 int y1;
 int y2;
 int calibrate;
-float P, I, D;
+float Pr, Ir, Dr;
+float Pl, Il, Dl;
+int setpoint;
+int Imin, Imax;
 
 
 void enc_check (void);
@@ -93,8 +100,8 @@ void frequencycalc (void)
    
     encodercountr2 = 0;
     encodercountl2 = 0;
-TMR0H = 0x3C;
-TMR0L = 0xB0;
+    TMR0H = 0x3C;
+    TMR0L = 0xB0;
     INTCONbits.TMR0IF = 0;
 }
 void enc_check (void) 
@@ -122,22 +129,22 @@ void inoutinit (void)
 {
     TRISB = 0;
             
-    TRISBbits.TRISB2 = 1;   //R encoder input
-    TRISBbits.TRISB1 = 1;   //L encoder input
+    TRISBbits.TRISB2 = 1;   //L encoder input
+    TRISBbits.TRISB1 = 1;   //R encoder input
     TRISBbits.TRISB0 = 1;
     
-    TRISCbits.TRISC1 = 0;	// R signal out
-    TRISCbits.TRISC2 = 0;   // L signal out
+    TRISCbits.TRISC1 = 0;	// L signal out
+    TRISCbits.TRISC2 = 0;   // R signal out
     TRISAbits.TRISA4 = 1;
 }
 void timerinit (void)
 {
-T0CONbits.T08BIT = 0;
-T0CONbits.T0CS = 0;
-T0CONbits.PSA = 1;
-TMR0H = 0x3C;
-TMR0L = 0xB0;
-T0CONbits.TMR0ON = 1;
+    T0CONbits.T08BIT = 0;
+    T0CONbits.T0CS = 0;
+    T0CONbits.PSA = 1;
+    TMR0H = 0x3C;
+    TMR0L = 0xB0;
+    T0CONbits.TMR0ON = 1;
 }
 
 void intinit (void)
@@ -168,18 +175,29 @@ void speedupdate(void)
 }
 void calcerror (void)
 {
-    errorprev = errorfreq;
-    error = encodercountr - encodercountl;
-
-    errorfreq = freqravg - freqlavg;  
-    P = (errorfreq * kp); 
+    errorprevr = errorfreqr;
+    errorprevl = errorfreql;
     
-    derror = errorfreq - errorprev;
-    D = (derror * kd);
+    //error = encodercountr - encodercountl;
+
+    //errorfreq = freqravg - freqlavg;  
+    
+    errorfreqr = setpoint - freqravg;
+    errorfreql = setpoint - freqlavg;
+    
+    Pr = (errorfreqr * kp); 
+    Pl = (errorfreql * kp);
+    
+    derrorr = errorfreqr - errorprevr;
+    derrorl = errorfreql - errorprevl;
+    //derror = freqravg / freqlavg;
+    Dr = (derrorr * kd);
+    Dl = (derrorl * kd);
     
  
 
-    slavePower += P + I + D;
+    slavePower -= Pl + Il + Dl;
+    masterPower -= Pr + Ir + Dr;
 
     
     /*
@@ -193,8 +211,28 @@ void calcerror (void)
     }
     */
     
-    ierror = ierror + errorfreq;
-    I = (ierror * ki);
+    ierrorl = ierrorl + errorfreql;
+    ierrorr = ierrorr + errorfreqr;
+    /*
+    if( ierrorr < Imin)
+    {
+        ierrorr = Imin;
+    }
+    if( ierrorl < Imin)
+    {
+        ierrorl = Imin;
+    }
+    if( ierrorr > Imax)
+    {
+        ierrorr = Imax;
+    }
+    if( ierrorl > Imax)
+    {
+        ierrorl = Imax;
+    }
+     * */
+    Ir = (ierrorr * ki);
+    Il = (ierrorl * ki);
     
    
     encodercountl = 0;
@@ -207,23 +245,35 @@ void main (void)
     OSCCONbits.IRCF2 = 1;
 
     calibrate = 0;
-    masterPower = x1;
-    slavePower = x2;
-    
+
+    ierrorl, ierrorr = 0;
     freqravg = 0;
     freqr = 0;
     freqlavg = 0;
     freql = 0;
     timercount = 0;
- 
+    
+    setpoint = 7;
+    
+    errorfreqr = 0;
+    errorfreql = 0;
+    errorprevl = 0;
+    errorprevr = 0;
     error = 0;
-    kp = 0.035;
-    kd = 0;
+    //kp = 0.125;
+    kp = 0.15;
+    kd = 1;
+    //kd = 0;
     ki = 0;
+    //ki = 0.0125;
     x1 = 144;
-    x2 = 144;
+    x2 = 144;    
+    masterPower = x1;
+    slavePower = x2;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
+    Imin = -1;
+    Imax = 1;
   
    
     inoutinit();
@@ -234,12 +284,13 @@ void main (void)
     { 
     INTCONbits.GIE = 0;
     speedupdate();
-    y1 = 2000 - x1;
-    y2 = 2000 - x2;
+
   
 
     x2 = slavePower;
-
+    x1 = masterPower;
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
     
     calcerror();
     INTCONbits.GIE = 1;
