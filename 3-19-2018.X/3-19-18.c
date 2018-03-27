@@ -46,10 +46,10 @@ float P, I, D;
 int setpoint;
 int Imin, Imax;
 
-
 void enc_check (void);
 void low_int_priorities (void);
 void frequencycalc (void);
+void calcerror (void);
 
 /*\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/*/
 /* define interrupt vector area						      */
@@ -83,11 +83,11 @@ void frequencycalc (void)
     freqravg = ((freqravg * 3)/4) + (freqr/4);
     freqlavg = ((freqlavg * 3)/4) + (freql/4);
 
-   
+    calcerror(); 
     encodercountr2 = 0;
     encodercountl2 = 0;
-    TMR0H = 0x3C;
-    TMR0L = 0xB0;
+TMR0H = 0xB1;
+TMR0L = 0xE0;
     INTCONbits.TMR0IF = 0;
 }
 void enc_check (void) 
@@ -96,8 +96,6 @@ void enc_check (void)
             {
                 encodercountr = encodercountr + 1;
                 encodercountr2 = encodercountr2 + 1;
-                if (encodercountr == 0xffff)
-                {encodercountr = 0;}
                 INTCON3bits.INT1F = 0;        // clear this interrupt flag
             }
         else if(INTCON3bits.INT2F == 1) 
@@ -105,8 +103,6 @@ void enc_check (void)
             {
                 encodercountl = encodercountl + 1;
                 encodercountl2 = encodercountl2 + 1;
-                if (encodercountl == 0xffff)
-                {encodercountl = 0;}
                 INTCON3bits.INT2F = 0;        // clear this interrupt flag
             }
     }
@@ -114,23 +110,21 @@ void enc_check (void)
 void inoutinit (void)
 {
     TRISB = 0;
-            
     TRISBbits.TRISB2 = 1;   //L encoder input
     TRISBbits.TRISB1 = 1;   //R encoder input
     TRISBbits.TRISB0 = 1;
-    
     TRISCbits.TRISC1 = 0;	// L signal out
     TRISCbits.TRISC2 = 0;   // R signal out
     TRISAbits.TRISA4 = 1;
 }
 void timerinit (void)
 {
-    T0CONbits.T08BIT = 0;
-    T0CONbits.T0CS = 0;
-    T0CONbits.PSA = 1;
-    TMR0H = 0x3C;
-    TMR0L = 0xB0;
-    T0CONbits.TMR0ON = 1;
+T0CONbits.T08BIT = 0;
+T0CONbits.T0CS = 0;
+T0CONbits.PSA = 1;
+TMR0H = 0xB1;
+TMR0L = 0xE0;
+T0CONbits.TMR0ON = 1;
 }
 
 void intinit (void)
@@ -173,27 +167,17 @@ void calcerror (void)
     D = (derror * kd);
     
     ierror = ierror + errorfreq;
+    
     I = (ierror * ki);
     
-    if(I>Imax)
-    {
-        I=1;
-    }
-    if(I<Imin)
-    {
-        I=-1;
-       
-    }
+
     
-    slavePower -= P + I + D;
-  
-
-
+    slavePower += P + I + D;
+ 
     
    
-    encodercountl = 0;
-    encodercountr = 0;
 }
+
 void main (void)
 {
     OSCCONbits.IRCF0 = 0;  // Set internal clock to 4 MHz next 3 instr.
@@ -215,11 +199,10 @@ void main (void)
     errorprev = 0;
     error = 0;
     kp = 0.11; // ***.075 steady oscillation .05 responds to disturbance .075 steady
-    
-    kd = 0.7; // .02 steady .075 steady oscillation ***.25
-    ki = 0;
-    x1 = 143;
-    x2 = 143;    
+    kd = 0.8; // .02 steady .075 steady oscillation ***.25
+    ki = 0.005;
+    x1 = 160;
+    x2 = 160;    
     masterPower = x1;
     slavePower = x2;
     y1 = 2000 - x1;
@@ -227,10 +210,21 @@ void main (void)
     Imin = -1;
     Imax = 1;
   
+    if( ierror < Imin)
+    {
+        ierror = Imin;
+    }
+   
+    if( ierror > Imax)
+    {
+        ierror = Imax;
+    }
+  
    
     inoutinit();
     intinit();
     timerinit();
+   
 
     while(1)
     { 
@@ -241,20 +235,27 @@ void main (void)
     y1 = 2000 - x1;
     y2 = 2000 - x2;
     
-    calcerror();
+    //calcerror(); 
+    //rpm();
+    if(encodercountr >= 28370)
+    {
+        for(;;)
+        {}
+    }
     INTCONbits.GIE = 1; 
      
-    Delay100TCYx(125);
+   
+    //Delay100TCYx(125);
   
     if(PORTAbits.RA4 == 0)
          {
-             x1 = x1 + 1;
+             x1 = 143;
              //x2 = x2 + 1;
              Delay10KTCYx(5); 
          }
     if(PORTBbits.RB0 == 0)
          {
-             x1 = x1 - 1;
+             x1 = 150;
              //x2 = x2 - 1;
              Delay10KTCYx(5); 
          }
