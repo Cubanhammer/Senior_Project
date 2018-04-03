@@ -5,7 +5,7 @@
 #include <p18f4520.h>
 #include <delays.h>
 #include <timers.h>
-
+#include <usart.h>
 
 #pragma config OSC = INTIO67	/* use internal oscillator */
 #pragma config WDT = OFF        /* no watchdog       */
@@ -37,6 +37,7 @@ float freqravg;
 float freqlavg;
 int timercount;
 float errorfreq;
+float errordir;
 int x1;
 int x2;
 int y1;
@@ -45,6 +46,12 @@ int calibrate;
 float P, I, D;
 int setpoint;
 int Imin, Imax;
+float headinghigh = 0;
+float headinglow = 0;
+float flip1 = 0;
+float flip2 = 0;
+float heading = 0;
+float direction;
 
 void enc_check (void);
 void low_int_priorities (void);
@@ -86,8 +93,8 @@ void frequencycalc (void)
     calcerror(); 
     encodercountr2 = 0;
     encodercountl2 = 0;
-TMR0H = 0xB1;
-TMR0L = 0xE0;
+    TMR0H = 0xB1;
+    TMR0L = 0xE0;
     INTCONbits.TMR0IF = 0;
 }
 void enc_check (void) 
@@ -155,27 +162,76 @@ void speedupdate(void)
 }
 void calcerror (void)
 {
-    errorprev = errorfreq;
+    errorprev = errordir;
     
 
-    errorfreq = freqr - freql;  
+    errordir = direction - heading;  
     
     
-    P = (errorfreq * kp); 
+    P = (errordir * kp); 
     
-    derror = errorfreq - errorprev;
+    derror = errordir - errorprev;
     D = (derror * kd);
     
-    ierror = ierror + errorfreq;
+    ierror = ierror + errordir;
     
     I = (ierror * ki);
     
 
     
-    slavePower += P + I + D;
+    slavePower -= P + I + D;
+
+    if(slavePower >= (163))
+    {        
+        slavePower = (163);
+    }
+    if(slavePower <= 143) 
+    { 
+        slavePower = 143; 
+    } 
+
  
     
    
+}
+void getheading(void)
+
+{
+    while(!DataRdyUSART());
+   	headinghigh = getcUSART();
+    flip1 = headinghigh;
+    while(!DataRdyUSART());
+    headinglow = getcUSART();
+    flip2 = headinglow;
+    if(headinghigh > 1)
+    {
+        headinghigh = flip2;
+        headinglow = flip1;
+    }
+        if(headinghigh < 0)
+    {
+        headinghigh = flip2;
+        headinglow = flip1;
+    }
+    if(headinghigh == 0)
+        {
+        if(headinglow > 100)
+            {
+                headinglow = headinglow + 255;
+            }
+        else if(headinglow < 0)
+            {
+                headinglow = headinglow + 255;
+            }
+        }
+    if( headinghigh == 1)
+        {
+            heading = 256 + headinglow;
+        }
+    if(headinghigh == 0)
+        {
+            heading = headinglow;
+        }
 }
 
 void main (void)
@@ -183,7 +239,14 @@ void main (void)
     OSCCONbits.IRCF0 = 0;  // Set internal clock to 4 MHz next 3 instr.
     OSCCONbits.IRCF1 = 1;  // see pp. 32 of 18F4520 PDF
     OSCCONbits.IRCF2 = 1;
-
+    
+    OpenUSART ( USART_TX_INT_OFF &
+                USART_RX_INT_OFF &
+            	USART_ASYNCH_MODE &
+            	USART_EIGHT_BIT &
+            	USART_CONT_RX &
+            	USART_BRGH_HIGH, 25);
+    
     calibrate = 0;
 
     ierror = 0;
@@ -192,17 +255,17 @@ void main (void)
     freqlavg = 0;
     freql = 0;
     timercount = 0;
-    
+    direction = 189;
     setpoint = 7;
     
     errorfreq = 0;
     errorprev = 0;
     error = 0;
-    kp = 0.11; // ***.075 steady oscillation .05 responds to disturbance .075 steady
-    kd = 0.8; // .02 steady .075 steady oscillation ***.25
-    ki = 0.005;
+    kp = 0.25; // ***.075 steady oscillation .05 responds to disturbance .075 steady
+    kd = 0.05; // .02 steady .075 steady oscillation ***.25
+    ki = 0;
     x1 = 160;
-    x2 = 160;    
+    x2 = 160 ;    
     masterPower = x1;
     slavePower = x2;
     y1 = 2000 - x1;
@@ -230,7 +293,8 @@ void main (void)
     { 
     INTCONbits.GIE = 0;
     speedupdate();
-
+    
+    getheading();
     x2 = slavePower;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
