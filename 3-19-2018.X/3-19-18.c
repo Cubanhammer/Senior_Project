@@ -48,15 +48,19 @@ int setpoint;
 int Imin, Imax;
 float headinghigh = 0;
 float headinglow = 0;
+float headingprev = 0;
 float flip1 = 0;
 float flip2 = 0;
 float heading = 0;
 float direction;
+int r = 0;
 
 void enc_check (void);
 void low_int_priorities (void);
 void frequencycalc (void);
 void calcerror (void);
+void heading_receive(void);
+
 
 /*\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/*/
 /* define interrupt vector area						      */
@@ -79,9 +83,29 @@ void low_int_priorities (void)
     {
         enc_check();
     }
+    if(PIR1bits.RCIF == 1)
+    {
+        heading_receive();
+    }
 }
 #pragma code	// normal code area from here down
 
+void heading_receive(void)
+{
+    headinglow = getcUSART();
+    if(headinglow < 0)
+    {
+        headinglow = headinglow + 255;
+    }
+    
+    if(PORTAbits.RA7 == 1)
+    {
+        headinglow = headinglow + 255;
+    }
+    
+    heading = headinglow;
+    calcerror(); 
+}
 void frequencycalc (void)
 { 
     freqr = (encodercountr2);
@@ -89,14 +113,13 @@ void frequencycalc (void)
     
     freqravg = ((freqravg * 3)/4) + (freqr/4);
     freqlavg = ((freqlavg * 3)/4) + (freql/4);
-
-    calcerror(); 
     encodercountr2 = 0;
     encodercountl2 = 0;
     TMR0H = 0xB1;
     TMR0L = 0xE0;
     INTCONbits.TMR0IF = 0;
 }
+
 void enc_check (void) 
     {        
         if(INTCON3bits.INT1F == 1) 
@@ -123,15 +146,17 @@ void inoutinit (void)
     TRISCbits.TRISC1 = 0;	// L signal out
     TRISCbits.TRISC2 = 0;   // R signal out
     TRISAbits.TRISA4 = 1;
+    TRISAbits.TRISA7 = 1;
 }
+
 void timerinit (void)
 {
-T0CONbits.T08BIT = 0;
-T0CONbits.T0CS = 0;
-T0CONbits.PSA = 1;
-TMR0H = 0xB1;
-TMR0L = 0xE0;
-T0CONbits.TMR0ON = 1;
+    T0CONbits.T08BIT = 0;
+    T0CONbits.T0CS = 0;
+    T0CONbits.PSA = 1;
+    TMR0H = 0xB1;
+    TMR0L = 0xE0;
+    T0CONbits.TMR0ON = 1;
 }
 
 void intinit (void)
@@ -139,6 +164,8 @@ void intinit (void)
     RCONbits.IPEN   = 1; // enable interrupt priority
     INTCONbits.GIE  = 1; // enable interrupts
     INTCONbits.PEIE = 1; // enable peripheral interrupts.
+    IPR1bits.RCIP = 0;
+    PIE1bits.RCIE = 1;
     INTCON3bits.INT1IE = 1;
     INTCON3bits.INT2IE = 1;
     INTCON3bits.INT1P = 0;
@@ -167,6 +194,19 @@ void calcerror (void)
 
     errordir = direction - heading;  
     
+
+    if(errordir > 180)
+    {
+   errordir = errordir - 360;
+    }
+    else if(errordir < -180)
+    {
+    errordir = errordir + 360;
+    }
+    else
+    {
+   errordir = errordir;//do nothing
+    }
     
     P = (errordir * kp); 
     
@@ -175,104 +215,6 @@ void calcerror (void)
     
     ierror = ierror + errordir;
     
-    I = (ierror * ki);
-    
-
-    
-    slavePower -= P + I + D;
-
-    if(slavePower >= (163))
-    {        
-        slavePower = (163);
-    }
-    if(slavePower <= 143) 
-    { 
-        slavePower = 143; 
-    } 
-
- 
-    
-   
-}
-void getheading(void)
-
-{
-    while(!DataRdyUSART());
-   	headinghigh = getcUSART();
-    flip1 = headinghigh;
-    while(!DataRdyUSART());
-    headinglow = getcUSART();
-    flip2 = headinglow;
-    if(headinghigh > 1)
-    {
-        headinghigh = flip2;
-        headinglow = flip1;
-    }
-        if(headinghigh < 0)
-    {
-        headinghigh = flip2;
-        headinglow = flip1;
-    }
-    if(headinghigh == 0)
-        {
-        if(headinglow > 100)
-            {
-                headinglow = headinglow + 255;
-            }
-        else if(headinglow < 0)
-            {
-                headinglow = headinglow + 255;
-            }
-        }
-    if( headinghigh == 1)
-        {
-            heading = 256 + headinglow;
-        }
-    if(headinghigh == 0)
-        {
-            heading = headinglow;
-        }
-}
-
-void main (void)
-{
-    OSCCONbits.IRCF0 = 0;  // Set internal clock to 4 MHz next 3 instr.
-    OSCCONbits.IRCF1 = 1;  // see pp. 32 of 18F4520 PDF
-    OSCCONbits.IRCF2 = 1;
-    
-    OpenUSART ( USART_TX_INT_OFF &
-                USART_RX_INT_OFF &
-            	USART_ASYNCH_MODE &
-            	USART_EIGHT_BIT &
-            	USART_CONT_RX &
-            	USART_BRGH_HIGH, 25);
-    
-    calibrate = 0;
-
-    ierror = 0;
-    freqravg = 0;
-    freqr = 0;
-    freqlavg = 0;
-    freql = 0;
-    timercount = 0;
-    direction = 189;
-    setpoint = 7;
-    
-    errorfreq = 0;
-    errorprev = 0;
-    error = 0;
-    kp = 0.25; // ***.075 steady oscillation .05 responds to disturbance .075 steady
-    kd = 0.05; // .02 steady .075 steady oscillation ***.25
-    ki = 0;
-    x1 = 160;
-    x2 = 160 ;    
-    masterPower = x1;
-    slavePower = x2;
-    y1 = 2000 - x1;
-    y2 = 2000 - x2;
-    Imin = -1;
-    Imax = 1;
-  
     if( ierror < Imin)
     {
         ierror = Imin;
@@ -282,6 +224,75 @@ void main (void)
     {
         ierror = Imax;
     }
+    
+    I = (ierror * ki);
+    
+
+     
+    slavePower += P + I + D;
+ /*  
+       if(slavePower >= 170)
+    {        
+        slavePower = 170;
+    }
+    if(slavePower <= 140) 
+    { 
+        slavePower = 140; 
+    } 
+
+    if(slavePower >= (x1 + 2))
+    {        
+        slavePower = (x1 + 2);
+    }
+    if(slavePower <= (x1 - 2)) 
+    { 
+        slavePower = (x1 - 2); 
+    } 
+*/
+ 
+    
+   
+}
+
+void main (void)
+{
+    OSCCONbits.IRCF0 = 0;  // Set internal clock to 4 MHz next 3 instr.
+    OSCCONbits.IRCF1 = 1;  // see pp. 32 of 18F4520 PDF
+    OSCCONbits.IRCF2 = 1;
+    
+    OpenUSART ( USART_TX_INT_OFF &
+                USART_RX_INT_ON &
+            	USART_ASYNCH_MODE &
+            	USART_EIGHT_BIT &
+            	USART_CONT_RX &
+            	USART_BRGH_HIGH, 25);
+
+    ierror = 0;
+    freqravg = 0;
+    freqr = 0;
+    freqlavg = 0;
+    freql = 0;
+    timercount = 0;
+    direction = 180;
+    errordir =0;
+    
+    setpoint = 7;
+    
+    errorfreq = 0;
+    errorprev = 0;
+    error = 0;
+    kp = 0.9; // ***.075 steady oscillation .05 responds to disturbance .075 steady
+    kd = 0.2; // .02 steady .075 steady oscillation ***.25
+    ki = 0;
+    x1 = 150;
+    x2 = 150;    
+    masterPower = x1;
+    slavePower = x2;
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+    Imin = -1;
+    Imax = 1;
+ 
   
    
     inoutinit();
@@ -293,8 +304,6 @@ void main (void)
     { 
     INTCONbits.GIE = 0;
     speedupdate();
-    
-    getheading();
     x2 = slavePower;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
