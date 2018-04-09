@@ -53,14 +53,23 @@ float flip1 = 0;
 float flip2 = 0;
 float heading = 0;
 float direction;
-int r = 0;
+float south, east, west = 0;
+int hold = 0;
+int start = 0;
+int turn = 0;
+int forward = 0;
 
 void enc_check (void);
 void low_int_priorities (void);
 void frequencycalc (void);
 void calcerror (void);
 void heading_receive(void);
-
+void initial_direction(void);
+void right_turn_forward(void);
+void right_turn(void);
+void return_direction(void);
+void left_turn_forward(void);
+void left_turn(void);
 
 /*\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/*/
 /* define interrupt vector area						      */
@@ -93,6 +102,7 @@ void low_int_priorities (void)
 void heading_receive(void)
 {
     headinglow = getcUSART();
+    
     if(headinglow < 0)
     {
         headinglow = headinglow + 255;
@@ -100,11 +110,14 @@ void heading_receive(void)
     
     if(PORTAbits.RA7 == 1)
     {
-        headinglow = headinglow + 255;
+        headinglow = headinglow + 256;
     }
     
     heading = headinglow;
+    if (start == 1)
+    {
     calcerror(); 
+    }
 }
 void frequencycalc (void)
 { 
@@ -191,21 +204,27 @@ void calcerror (void)
 {
     errorprev = errordir;
     
-
-    errordir = direction - heading;  
+    if (turn == 0)
+    {
+        errordir = direction - heading;  
+    }
+    if (turn == 3)
+    {
+        errordir = south - heading;
+    }
     
 
     if(errordir > 180)
     {
-   errordir = errordir - 360;
+        errordir = errordir - 360;
     }
     else if(errordir < -180)
     {
-    errordir = errordir + 360;
+        errordir = errordir + 360;
     }
     else
     {
-   errordir = errordir;//do nothing
+        errordir = errordir;//do nothing
     }
     
     P = (errordir * kp); 
@@ -229,31 +248,202 @@ void calcerror (void)
     
 
      
-    slavePower += P + I + D;
- /*  
-       if(slavePower >= 170)
+    //slavePower += P + I + D;
+  
+    
+    /* 
+       if(slavePower >= 165)
     {        
-        slavePower = 170;
+        slavePower = 165;
     }
-    if(slavePower <= 140) 
+    if(slavePower <= 155) 
     { 
-        slavePower = 140; 
+        slavePower = 155; 
     } 
 
+ 
     if(slavePower >= (x1 + 2))
     {        
         slavePower = (x1 + 2);
     }
-    if(slavePower <= (x1 - 2)) 
+    if(slavePower <= (x1 - 1)) 
     { 
-        slavePower = (x1 - 2); 
+        slavePower = (x1 - 1); 
     } 
 */
- 
-    
-   
+}
+void initial_direction (void)
+{
+    INTCONbits.GIE = 0;
+    speedupdate();
+    x2 = slavePower;
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+
+    if(encodercountr >= 2837)
+    {
+        turn = 1;
+        Delay10KTCYx(100);
+    }
+
+    INTCONbits.GIE = 1; 
+
+
+    if(PORTAbits.RA4 == 0)
+         {
+            x1 = 160;
+            x2 = 160;
+            slavePower = 160;
+            direction = heading;
+            east = heading + 90;
+
+            if(east > 360)
+            {
+                east = east - 360;
+            }
+
+            west = heading - 90;
+            if(west < 0)
+            { 
+                west = west + 360;
+            }
+
+            south = heading + 180;
+            if(south > 360)
+            { 
+                south = south - 360;
+            }
+
+            start = 1;
+             //x2 = x2 + 1;
+            Delay10KTCYx(5); 
+
+         }
 }
 
+void right_turn_forward(void)
+{
+    if (forward == 0)
+    {
+    INTCONbits.GIE = 0;
+    x1 = 143;
+    x2 = 158;  
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+    speedupdate();
+    
+    if(encodercountr >= 200)
+        {
+        encodercountr = 0;
+        forward = 1;            
+        errordir = 0;
+        Delay10KTCYx(100);
+        }
+    INTCONbits.GIE = 1;
+    }
+    if(forward == 1)
+    {
+        INTCONbits.GIE = 0;
+        speedupdate();
+        x2 = slavePower;
+        y1 = 2000 - x1;
+        y2 = 2000 - x2;
+
+        if(encodercountr >= 200)
+        {
+            encodercountr = 0;
+            turn = 2;
+            forward = 0;
+            Delay10KTCYx(100);
+        }
+        INTCONbits.GIE = 1;    
+    }
+}
+void right_turn(void)
+{
+    INTCONbits.GIE = 0;
+    x1 = 143;
+    x2 = 158;  
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+    speedupdate();
+    
+    if(encodercountr >= 200)
+        {
+        encodercountr = 0;
+        turn = 3;
+        Delay10KTCYx(100);
+        }
+    INTCONbits.GIE = 1;
+}
+void return_direction(void)
+{
+    INTCONbits.GIE = 0;
+    speedupdate();
+    x2 = slavePower;
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+
+    if(encodercountr >= 2837)
+    {
+        turn = 4;
+        Delay10KTCYx(100);
+    }
+
+    INTCONbits.GIE = 1; 
+}
+void left_turn_forward(void)
+{
+    if (forward == 0)
+    {
+    INTCONbits.GIE = 0;
+    x1 = 158;
+    x2 = 143;  
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+    speedupdate();
+    
+    if(encodercountr >= 200)
+        {
+        encodercountr = 0;
+        forward = 1;
+        Delay10KTCYx(100);
+        }
+    INTCONbits.GIE = 1;
+    }
+    if(forward == 1)
+    {
+        INTCONbits.GIE = 0;
+        speedupdate();
+        x2 = slavePower;
+        y1 = 2000 - x1;
+        y2 = 2000 - x2;
+
+        if(encodercountr >= 200)
+        {
+            turn = 5;
+            forward = 0;
+                Delay10KTCYx(100);
+        }
+        INTCONbits.GIE = 1;    
+    }
+}
+void left_turn(void)
+{
+    INTCONbits.GIE = 0;
+    x1 = 158;
+    x2 = 143;  
+    y1 = 2000 - x1;
+    y2 = 2000 - x2;
+    speedupdate();
+    
+    if(encodercountr >= 200)
+        {
+        encodercountr = 0;
+        turn = 0;
+        }
+    INTCONbits.GIE = 1;
+}
 void main (void)
 {
     OSCCONbits.IRCF0 = 0;  // Set internal clock to 4 MHz next 3 instr.
@@ -273,16 +463,13 @@ void main (void)
     freqlavg = 0;
     freql = 0;
     timercount = 0;
-    direction = 180;
+    direction = 5;
     errordir =0;
-    
-    setpoint = 7;
-    
     errorfreq = 0;
     errorprev = 0;
     error = 0;
-    kp = 0.9; // ***.075 steady oscillation .05 responds to disturbance .075 steady
-    kd = 0.2; // .02 steady .075 steady oscillation ***.25
+    kp = 0.0007; 
+    kd = 0;
     ki = 0;
     x1 = 150;
     x2 = 150;    
@@ -301,36 +488,44 @@ void main (void)
    
 
     while(1)
-    { 
-    INTCONbits.GIE = 0;
-    speedupdate();
-    x2 = slavePower;
-    y1 = 2000 - x1;
-    y2 = 2000 - x2;
-    
-    //calcerror(); 
-    //rpm();
-    if(encodercountr >= 28370)
     {
-        for(;;)
-        {}
-    }
-    INTCONbits.GIE = 1; 
-     
-   
-    //Delay100TCYx(125);
-  
-    if(PORTAbits.RA4 == 0)
-         {
-             x1 = 143;
-             //x2 = x2 + 1;
-             Delay10KTCYx(5); 
-         }
+        if(turn == 0)
+        {
+            initial_direction();
+        }
+        if(turn == 1)
+        {
+            right_turn_forward();
+        }
+        if(turn == 2)
+        {
+            right_turn();
+        }
+        if(turn == 3)
+        {
+            return_direction();
+        }
+        if(turn == 4)
+        {
+            left_turn_forward();
+        }
+        if(turn == 5)
+        {
+            left_turn();
+        }
+        
     if(PORTBbits.RB0 == 0)
          {
              x1 = 150;
+             x2 = 150;
+             errordir = 0;
+             errorprev = 0;
+             ierror = 0;
+             start = 0;
+             slavePower = 150;
              //x2 = x2 - 1;
              Delay10KTCYx(5); 
          }
+ 
        }
 } 
