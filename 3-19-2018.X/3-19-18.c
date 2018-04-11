@@ -58,6 +58,7 @@ int hold = 0;
 int start = 0;
 int turn = 0;
 int forward = 0;
+int osc = 0;
 
 void enc_check (void);
 void low_int_priorities (void);
@@ -114,10 +115,6 @@ void heading_receive(void)
     }
     
     heading = headinglow;
-    if (start == 1)
-    {
-    calcerror(); 
-    }
 }
 void frequencycalc (void)
 { 
@@ -128,6 +125,11 @@ void frequencycalc (void)
     freqlavg = ((freqlavg * 3)/4) + (freql/4);
     encodercountr2 = 0;
     encodercountl2 = 0;
+    
+    if (start == 1)
+    {
+    calcerror(); 
+    }
     TMR0H = 0xB1;
     TMR0L = 0xE0;
     INTCONbits.TMR0IF = 0;
@@ -206,11 +208,41 @@ void calcerror (void)
     
     if (turn == 0)
     {
-        errordir = direction - heading;  
+        errordir = freqr - freql;  
     }
+        
+    if (turn == 1)
+    {
+        errordir = east - heading;  
+        if(forward == 1)
+        {
+            errordir = freqr - freql;
+        }
+ 
+    }
+    
+    if (turn == 2)
+    {
+        errordir = south - heading;  
+    }
+    
     if (turn == 3)
     {
-        errordir = south - heading;
+        errordir = freqr - freql;
+    }
+    
+    if (turn == 4)
+    {
+        errordir = east - heading;
+        if(forward == 1)
+        {
+            errordir = freqr - freql;
+        }
+    }
+       
+    if (turn == 5)
+    {
+        errordir = direction - heading;  
     }
     
 
@@ -245,23 +277,36 @@ void calcerror (void)
     }
     
     I = (ierror * ki);
-    
-
+   
      
-    //slavePower += P + I + D;
-  
+    slavePower += P + I + D;
     
-    /* 
-       if(slavePower >= 165)
-    {        
-        slavePower = 165;
+    if(turn == 1 || turn == 2 || turn == 4 || turn == 5)
+    {
+        masterPower -= P + I + D;
     }
-    if(slavePower <= 155) 
-    { 
-        slavePower = 155; 
-    } 
 
- 
+   
+    if(turn == 1 || turn == 2 || turn == 4 || turn == 5)
+    {
+    if(slavePower >= 159)
+    {        
+        slavePower = 159;
+    }
+    if(slavePower <= 143) 
+    { 
+        slavePower = 143; 
+    } 
+    if(masterPower >= 159)
+    {        
+        masterPower = 159;
+    }
+    if(masterPower <= 143) 
+    { 
+        masterPower = 143; 
+    } 
+    }
+ /*
     if(slavePower >= (x1 + 2))
     {        
         slavePower = (x1 + 2);
@@ -275,49 +320,51 @@ void calcerror (void)
 void initial_direction (void)
 {
     INTCONbits.GIE = 0;
-    speedupdate();
+    speedupdate();    
+    INTCONbits.GIE = 1; 
     x2 = slavePower;
+    x1 = masterPower;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
 
-    if(encodercountr >= 2837)
+    if(encodercountr >= 478)
     {
+        
         turn = 1;
         Delay10KTCYx(100);
     }
 
-    INTCONbits.GIE = 1; 
-
-
     if(PORTAbits.RA4 == 0)
          {
-            x1 = 160;
-            x2 = 160;
-            slavePower = 160;
+            x1 = 159;
+            x2 = 159;
+            slavePower = 159;
+            masterPower = 159;
+            encodercountr = 0;
+            encodercountl = 0;
             direction = heading;
-            east = heading + 90;
+        east = heading + 90;
 
-            if(east > 360)
-            {
-                east = east - 360;
-            }
+        if(east > 360)
+        {
+            east = east - 360;
+        }
 
-            west = heading - 90;
-            if(west < 0)
-            { 
-                west = west + 360;
-            }
+        west = heading - 90;
+        if(west < 0)
+        { 
+            west = west + 360;
+        }
 
-            south = heading + 180;
-            if(south > 360)
-            { 
-                south = south - 360;
-            }
+        south = heading + 180;
+        if(south > 360)
+        { 
+            south = south - 360;
+        }
 
             start = 1;
              //x2 = x2 + 1;
             Delay10KTCYx(5); 
-
          }
 }
 
@@ -325,124 +372,191 @@ void right_turn_forward(void)
 {
     if (forward == 0)
     {
-    INTCONbits.GIE = 0;
-    x1 = 143;
-    x2 = 158;  
+
+    x1 = masterPower;
+    x2 = slavePower;  
     y1 = 2000 - x1;
     y2 = 2000 - x2;
+    INTCONbits.GIE = 0;
     speedupdate();
-    
-    if(encodercountr >= 200)
+    INTCONbits.GIE = 1;
+    if(heading == east)
+    {
+        osc = osc + 1;
+    }
+    if (osc == 150)
         {
+        osc = 0;
+        Delay10KTCYx(100);
         encodercountr = 0;
+        encodercountl = 0;
         forward = 1;            
         errordir = 0;
-        Delay10KTCYx(100);
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
+        encodercountr = 0;
+        encodercountl = 0;
         }
-    INTCONbits.GIE = 1;
+
     }
     if(forward == 1)
     {
         INTCONbits.GIE = 0;
-        speedupdate();
+        speedupdate();  
+        INTCONbits.GIE = 1; 
+        x1 = masterPower;
         x2 = slavePower;
         y1 = 2000 - x1;
         y2 = 2000 - x2;
 
-        if(encodercountr >= 200)
+        if(encodercountr >= 48)
         {
             encodercountr = 0;
             turn = 2;
             forward = 0;
+            errordir = 0;
             Delay10KTCYx(100);
         }
-        INTCONbits.GIE = 1;    
+    
     }
 }
 void right_turn(void)
 {
-    INTCONbits.GIE = 0;
-    x1 = 143;
-    x2 = 158;  
+    x1 = masterPower;
+    x2 = slavePower;  
     y1 = 2000 - x1;
     y2 = 2000 - x2;
+    INTCONbits.GIE = 0;
     speedupdate();
-    
-    if(encodercountr >= 200)
-        {
-        encodercountr = 0;
-        turn = 3;
-        Delay10KTCYx(100);
-        }
     INTCONbits.GIE = 1;
+    if(heading == south)
+    {
+        osc = osc + 1;
+    }
+    if (osc == 150)
+        {
+        osc = 0;
+        Delay10KTCYx(100);
+        encodercountr = 0;
+        encodercountl = 0;
+        turn = 3;           
+        errordir = 0;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
+        encodercountr = 0;
+        encodercountl = 0;
+        }
+
 }
 void return_direction(void)
 {
     INTCONbits.GIE = 0;
-    speedupdate();
+    speedupdate();    
+    INTCONbits.GIE = 1; 
     x2 = slavePower;
+    x1 = masterPower;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
 
-    if(encodercountr >= 2837)
-    {
+    if(encodercountr >= 478)
+    {  
         turn = 4;
+        forward = 0;
         Delay10KTCYx(100);
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
+        encodercountr = 0;
+        encodercountl = 0;
     }
-
-    INTCONbits.GIE = 1; 
 }
 void left_turn_forward(void)
 {
     if (forward == 0)
     {
-    INTCONbits.GIE = 0;
-    x1 = 158;
-    x2 = 143;  
+    x1 = masterPower;
+    x2 = slavePower;  
     y1 = 2000 - x1;
     y2 = 2000 - x2;
+    INTCONbits.GIE = 0;
     speedupdate();
-    
-    if(encodercountr >= 200)
-        {
-        encodercountr = 0;
-        forward = 1;
-        Delay10KTCYx(100);
-        }
     INTCONbits.GIE = 1;
+    if(heading == east)
+    {
+        osc = osc + 1;
+    }
+    if (osc == 150)
+        {
+        osc = 0;
+        Delay10KTCYx(100);
+        encodercountr = 0;
+        encodercountl = 0;
+        forward = 1;            
+        errordir = 0;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
+        encodercountr = 0;
+        encodercountl = 0;
+        }
+
     }
     if(forward == 1)
     {
         INTCONbits.GIE = 0;
-        speedupdate();
+        speedupdate();  
+        INTCONbits.GIE = 1; 
+        x1 = masterPower;
         x2 = slavePower;
         y1 = 2000 - x1;
         y2 = 2000 - x2;
 
-        if(encodercountr >= 200)
+        if(encodercountr >= 48)
         {
+            encodercountr = 0;
             turn = 5;
             forward = 0;
-                Delay10KTCYx(100);
+            errordir = 0;
+            Delay10KTCYx(100);
         }
-        INTCONbits.GIE = 1;    
+    
     }
 }
 void left_turn(void)
 {
-    INTCONbits.GIE = 0;
-    x1 = 158;
-    x2 = 143;  
+    x1 = masterPower;
+    x2 = slavePower;  
     y1 = 2000 - x1;
     y2 = 2000 - x2;
+    INTCONbits.GIE = 0;
     speedupdate();
-    
-    if(encodercountr >= 200)
-        {
-        encodercountr = 0;
-        turn = 0;
-        }
     INTCONbits.GIE = 1;
+    if(heading == direction)
+    {
+        osc = osc + 1;
+    }
+    if (osc == 150)
+        {
+        osc = 0;
+        Delay10KTCYx(100);
+        encodercountr = 0;
+        encodercountl = 0;
+        turn = 0;           
+        errordir = 0;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
+        encodercountr = 0;
+        encodercountl = 0;
+        }
+
 }
 void main (void)
 {
@@ -463,25 +577,23 @@ void main (void)
     freqlavg = 0;
     freql = 0;
     timercount = 0;
-    direction = 5;
-    errordir =0;
+    direction = 0;
+    errordir = 0;
     errorfreq = 0;
     errorprev = 0;
     error = 0;
-    kp = 0.0007; 
-    kd = 0;
+    kp = 0.11; //0.0011
+    kd = 0.7;    //0.5
     ki = 0;
-    x1 = 150;
-    x2 = 150;    
+    x1 = 151;
+    x2 = 151;    
     masterPower = x1;
     slavePower = x2;
     y1 = 2000 - x1;
     y2 = 2000 - x2;
     Imin = -1;
     Imax = 1;
- 
-  
-   
+
     inoutinit();
     intinit();
     timerinit();
@@ -516,16 +628,16 @@ void main (void)
         
     if(PORTBbits.RB0 == 0)
          {
-             x1 = 150;
-             x2 = 150;
+             x1 = 151;
+             x2 = 151;
              errordir = 0;
              errorprev = 0;
              ierror = 0;
              start = 0;
-             slavePower = 150;
+             slavePower = 151;
+             masterPower = 151;
              //x2 = x2 - 1;
              Delay10KTCYx(5); 
-         }
- 
+         } 
        }
 } 
