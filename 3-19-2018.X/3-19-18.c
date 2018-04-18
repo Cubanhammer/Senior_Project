@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <p18f4520.h>
@@ -48,6 +46,8 @@ int start = 0;
 int turn = 0;
 int forward = 0;
 int osc = 0;
+int temp = 0;
+float headingadjust = 0;
 
 void enc_check (void);
 void low_int_priorities (void);
@@ -180,6 +180,20 @@ void speedupdate(void)
 }
 void calcerror (void)
 {
+    
+    if((turn == 1 || turn == 2 || turn == 4 || turn == 5) && forward == 0)
+    {
+        kp = 0.023;
+        kd = 0.4; 
+        ki = 0.001;
+    }
+    else
+    {
+        kp = 0.11;
+        kd = 0.7; 
+        ki = 0;   
+    }
+
     errorprev = errordir;
     
     if (turn == 0)
@@ -189,7 +203,7 @@ void calcerror (void)
         
     if (turn == 1)
     {
-        errordir = 90 - heading;  
+        errordir = 90 - (heading - headingadjust);  
         if(forward == 1)
         {
             errordir = freqr - freql;
@@ -199,7 +213,7 @@ void calcerror (void)
     
     if (turn == 2)
     {
-        errordir = 90 - heading;  
+        errordir = 90 - (heading - headingadjust);  
     }
     
     if (turn == 3)
@@ -209,7 +223,7 @@ void calcerror (void)
     
     if (turn == 4)
     {
-        errordir = -90 - heading;
+        errordir = -90 - (heading - headingadjust);
         if(forward == 1)
         {
             errordir = freqr - freql;
@@ -218,7 +232,7 @@ void calcerror (void)
        
     if (turn == 5)
     {
-        errordir = -90 - heading;  
+        errordir = -90 - (heading - headingadjust);  
     }
     
 
@@ -265,21 +279,21 @@ void calcerror (void)
    
     if(turn == 1 || turn == 2 || turn == 4 || turn == 5)
     {
-        if(slavePower >= 160)
+        if(slavePower >= 161)
         {        
-            slavePower = 160;
+            slavePower = 161;
         }
-        if(slavePower <= 142) 
+        if(slavePower <= 140) 
         { 
-            slavePower = 142; 
+            slavePower = 140; 
         } 
-        if(masterPower >= 160)
+        if(masterPower >= 161)
         {        
-            masterPower = 160;
+            masterPower = 161;
         }
-        if(masterPower <= 142) 
+        if(masterPower <= 140) 
         { 
-            masterPower = 142; 
+            masterPower = 140; 
         } 
     }
 
@@ -295,22 +309,26 @@ void initial_direction (void)
     y2 = 2000 - x2;
 
     if(encodercountr >= 478)
-    {
+    {        
+        Delay10KTCYx(100);
         turn = 1;
+        headingadjust = heading;
         PORTAbits.RA7 = 0;
         Delay10KTCYx(5); 
         PORTAbits.RA7 = 1;
         Delay10KTCYx(200);
+
     }
 
     if(PORTAbits.RA4 == 0)
          {
-            x1 = 160;
-            x2 = 160;
-            slavePower = 160;
-            masterPower = 160;
+            x1 = 159;
+            x2 = 159;
+            slavePower = 159;
+            masterPower = 159;
             encodercountr = 0;
-            encodercountl = 0;
+            encodercountl = 0;            
+            Delay10KTCYx(100); 
             PORTAbits.RA7 = 0; 
             Delay10KTCYx(5); 
             PORTAbits.RA7 = 1;
@@ -345,10 +363,11 @@ void right_turn_forward(void)
             errordir = 0;
             x1 = 160;
             x2 = 160;
-            slavePower = 160;
-            masterPower = 160;
+            slavePower = 159;
+            masterPower = 159;
             encodercountr = 0;
             encodercountl = 0;
+            Delay10KTCYx(100); 
             PORTAbits.RA7 = 0; 
             Delay10KTCYx(5); 
             PORTAbits.RA7 = 1;
@@ -368,8 +387,10 @@ void right_turn_forward(void)
         {
             encodercountr = 0;
             turn = 2;
+            headingadjust = heading;
             forward = 0;
             errordir = 0;          
+            Delay10KTCYx(100); 
             PORTAbits.RA7 = 0; 
             Delay10KTCYx(5); 
             PORTAbits.RA7 = 1;
@@ -398,10 +419,10 @@ void right_turn(void)
         encodercountl = 0;
         turn = 3;           
         errordir = 0;
-        x1 = 160;
-        x2 = 160;
-        slavePower = 160;
-        masterPower = 160;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
         encodercountr = 0;
         encodercountl = 0;
         }
@@ -422,16 +443,18 @@ void return_direction(void)
         turn = 4;
         forward = 0;
         Delay10KTCYx(100);
-        x1 = 160;
-        x2 = 160;
-        slavePower = 160;
-        masterPower = 160;
+        headingadjust = heading;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
         encodercountr = 0;
         encodercountl = 0;
-            PORTAbits.RA7 = 0; 
-            Delay10KTCYx(5); 
-            PORTAbits.RA7 = 1;
-            Delay10KTCYx(200); 
+        Delay10KTCYx(100); 
+        PORTAbits.RA7 = 0; 
+        Delay10KTCYx(5); 
+        PORTAbits.RA7 = 1;
+        Delay10KTCYx(200); 
     }
 }
 void left_turn_forward(void)
@@ -457,10 +480,10 @@ void left_turn_forward(void)
         encodercountl = 0;
         forward = 1;            
         errordir = 0;
-        x1 = 160;
-        x2 = 160;
-        slavePower = 160;
-        masterPower = 160;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
         encodercountr = 0;
         encodercountl = 0;
         }
@@ -480,8 +503,12 @@ void left_turn_forward(void)
         {
             encodercountr = 0;
             turn = 5;
+            headingadjust = heading;
             forward = 0;
             errordir = 0;
+                        
+            Delay10KTCYx(100); 
+                        
             PORTAbits.RA7 = 0; 
             Delay10KTCYx(5); 
             PORTAbits.RA7 = 1;
@@ -511,10 +538,10 @@ void left_turn(void)
         encodercountl = 0;
         turn = 0;           
         errordir = 0;
-        x1 = 160;
-        x2 = 160;
-        slavePower = 160;
-        masterPower = 160;
+        x1 = 159;
+        x2 = 159;
+        slavePower = 159;
+        masterPower = 159;
         encodercountr = 0;
         encodercountl = 0;
         }
@@ -542,7 +569,7 @@ void main (void)
     error = 0;
     kp = 0.11;
     kd = 0.7; 
-    ki = 0;
+    ki = 0;  
     x1 = 151;
     x2 = 151;    
     masterPower = x1;
@@ -559,6 +586,18 @@ void main (void)
 
     while(1)
     {
+        if(RCSTAbits.OERR)
+        {
+            do
+            {
+                temp = RCREG;
+                temp = RCREG;
+                temp = RCREG;
+                RCSTAbits.CREN = 0;
+                RCSTAbits.CREN = 1;
+
+            } while(RCSTAbits.OERR);
+        }
         if(turn == 0)
         {
             initial_direction();
